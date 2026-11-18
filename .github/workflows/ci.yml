@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: install.sh (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sintaxis
+        run: bash -n install.sh
+
+      - name: Pruebas
+        run: bash tests/run-tests.sh
+
+      - name: shellcheck
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning install.sh || true
+
+      - name: Instalar y verificar
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          bash install.sh --prefix "$RUNNER_TEMP/bin" --no-path
+          "$RUNNER_TEMP/bin/claude-deepseek" 2>&1 | grep -q "falta DEEPSEEK_API_KEY" && echo "wrapper correcto"

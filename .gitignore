@@ -1,0 +1,9 @@
+# instalación local
+*.local
+
+# entornos
+.venv/
+node_modules/
+
+# sistema
+.DS_Store
