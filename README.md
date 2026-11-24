@@ -69,10 +69,13 @@ ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-flash[1m]
 ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-flash[1m]
 ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash
 CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash
-CLAUDE_CODE_EFFORT_LEVEL=max
 CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432
 CLAUDE_CONFIG_DIR=~/.config/claude-deepseek
 ```
+
+Effort starts at `DEEPSEEK_EFFORT_LEVEL` (default `max`) through the
+`--effort` flag. The wrapper does not export `CLAUDE_CODE_EFFORT_LEVEL`, so
+`/effort` can raise or lower the level during the session.
 
 `CLAUDE_CONFIG_DIR` is what avoids the "Both ANTHROPIC_AUTH_TOKEN and /login
 managed key set" warning: the DeepSeek session keeps its own settings and
@@ -134,7 +137,7 @@ Put overrides in `~/.config/deepseek/claude-code.env`:
 DEEPSEEK_MODEL=deepseek-v4-pro
 DEEPSEEK_FAST_MODEL=deepseek-flash
 DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
-DEEPSEEK_EFFORT_LEVEL=high
+DEEPSEEK_EFFORT_LEVEL=high   # initial effort; /effort can change it
 DEEPSEEK_SHARE_SESSIONS=0   # keep sessions isolated
 ```
 
@@ -172,6 +175,7 @@ bash install.sh --uninstall         # remove binaries and the key file
 | `HTTP 402` | no balance | top up the DeepSeek account |
 | `HTTP 400` | wrong model name | use `deepseek-flash` |
 | `zsh: no matches found` | `[1m]` unquoted | keep `DEEPSEEK_MODEL='deepseek-flash[1m]'` |
+| `/effort` does not change the level | older wrapper exported `CLAUDE_CODE_EFFORT_LEVEL` | rerun the installer (1.1.1+) |
 | Warning about two credentials | shared Claude config | leave `CLAUDE_CONFIG_DIR` as set, or `claude /logout` |
 | Sessions not listed in `claude-deepseek --resume` | profile created before 1.1.0 | rerun the installer and launch once; the profile is migrated |
 | Commands not found after install | shell not reloaded | `exec $SHELL -l` |

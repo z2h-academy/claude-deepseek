@@ -71,10 +71,13 @@ ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-flash[1m]
 ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-flash[1m]
 ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash
 CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash
-CLAUDE_CODE_EFFORT_LEVEL=max
 CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432
 CLAUDE_CONFIG_DIR=~/.config/claude-deepseek
 ```
+
+El esfuerzo inicial se toma de `DEEPSEEK_EFFORT_LEVEL` (default `max`) y se
+pasa con el flag `--effort`. El wrapper no exporta `CLAUDE_CODE_EFFORT_LEVEL`,
+así que `/effort` puede subirlo o bajarlo durante la sesión.
 
 `CLAUDE_CONFIG_DIR` es lo que evita el aviso "Both ANTHROPIC_AUTH_TOKEN and
 /login managed key set": la sesión de DeepSeek tiene su propia configuración y
@@ -135,7 +138,7 @@ Los cambios van en `~/.config/deepseek/claude-code.env`:
 DEEPSEEK_MODEL=deepseek-v4-pro
 DEEPSEEK_FAST_MODEL=deepseek-flash
 DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
-DEEPSEEK_EFFORT_LEVEL=high
+DEEPSEEK_EFFORT_LEVEL=high   # esfuerzo inicial; /effort puede cambiarlo
 DEEPSEEK_SHARE_SESSIONS=0   # aislar las sesiones
 ```
 
@@ -173,6 +176,7 @@ bash install.sh --uninstall         # quitar binarios y archivo de la key
 | `HTTP 402` | sin saldo | recargar la cuenta de DeepSeek |
 | `HTTP 400` | nombre de modelo incorrecto | usar `deepseek-flash` |
 | `zsh: no matches found` | `[1m]` sin comillas | mantener `DEEPSEEK_MODEL='deepseek-flash[1m]'` |
+| `/effort` no cambia el nivel | wrapper anterior exportaba `CLAUDE_CODE_EFFORT_LEVEL` | reinstalar (1.1.1+) |
 | Aviso de dos credenciales | configuración compartida | dejar `CLAUDE_CONFIG_DIR` como está, o `claude /logout` |
 | Las sesiones no aparecen en `claude-deepseek --resume` | perfil creado antes de 1.1.0 | reinstalar y arrancar una vez; el perfil se migra |
 | Los comandos no aparecen | shell sin recargar | `exec $SHELL -l` |

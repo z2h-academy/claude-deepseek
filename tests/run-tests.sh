@@ -16,9 +16,9 @@ mkdir -p "$HOME" "$PREFIX"
 
 # Aislar la suite de la sesión que la ejecuta (por ejemplo, dentro de
 # claude-deepseek): el wrapper hereda estas variables del entorno.
-unset CLAUDE_CONFIG_DIR DEEPSEEK_CONFIG_DIR DEEPSEEK_SHARED_CONFIG DEEPSEEK_SHARE_SESSIONS \
-      DEEPSEEK_ENV_FILE DEEPSEEK_API_KEY DEEPSEEK_BASE_URL DEEPSEEK_MODEL DEEPSEEK_FAST_MODEL \
-      DEEPSEEK_EFFORT_LEVEL DEEPSEEK_AUTO_COMPACT_WINDOW
+unset CLAUDE_CONFIG_DIR CLAUDE_CODE_EFFORT_LEVEL DEEPSEEK_CONFIG_DIR DEEPSEEK_SHARED_CONFIG \
+      DEEPSEEK_SHARE_SESSIONS DEEPSEEK_ENV_FILE DEEPSEEK_API_KEY DEEPSEEK_BASE_URL DEEPSEEK_MODEL \
+      DEEPSEEK_FAST_MODEL DEEPSEEK_EFFORT_LEVEL DEEPSEEK_AUTO_COMPACT_WINDOW
 
 # claude falso: el instalador y el wrapper solo necesitan que exista.
 mkdir -p "$TMP/fakebin"
@@ -39,7 +39,7 @@ OUT="$(bash "$REPO/install.sh" --prefix "$PREFIX" --no-path 2>&1)"
 [ -x "$PREFIX/claude-deepseek" ] && ok "instala claude-deepseek" || fail "falta claude-deepseek"
 [ -x "$PREFIX/deepseek-key" ] && ok "instala deepseek-key" || fail "falta deepseek-key"
 [ -x "$PREFIX/deepseek-check" ] && ok "instala deepseek-check" || fail "falta deepseek-check"
-echo "$OUT" | grep -q "v1.1.0" && ok "muestra la versión" || fail "sin versión"
+echo "$OUT" | grep -q "v1.1.1" && ok "muestra la versión" || fail "sin versión"
 
 # 3. archivo de la key con permisos 600
 ENVFILE="$HOME/.config/deepseek/claude-code.env"
@@ -67,7 +67,7 @@ echo "$OUT" | grep -q "falta DEEPSEEK_API_KEY" && ok "mensaje de key faltante" |
 # 8. wrapper con key invoca claude con el entorno correcto
 printf 'DEEPSEEK_API_KEY=sk-fake-test\n' > "$ENVFILE"
 OUT="$(ANTHROPIC_API_KEY=sk-anthropic "$PREFIX/claude-deepseek" hola 2>&1)"
-echo "$OUT" | grep -q "fake claude hola" && ok "wrapper ejecuta claude" || fail "wrapper no ejecuta claude"
+echo "$OUT" | grep -q "fake claude --effort max hola" && ok "wrapper ejecuta claude" || fail "wrapper no ejecuta claude"
 
 # 9. el wrapper aísla la config de Claude Code
 OUT="$(printf 'DEEPSEEK_API_KEY=sk-fake-test\n' > "$ENVFILE"; \
@@ -77,6 +77,8 @@ echo "base=${ANTHROPIC_BASE_URL:-}"
 echo "token_set=$([ -n "${ANTHROPIC_AUTH_TOKEN:-}" ] && echo si || echo no)"
 echo "api_key_set=$([ -n "${ANTHROPIC_API_KEY:-}" ] && echo si || echo no)"
 echo "config_dir=${CLAUDE_CONFIG_DIR:-}"
+echo "args=$*"
+echo "effort_env=${CLAUDE_CODE_EFFORT_LEVEL:-unset}"
 echo "projects_link=$([ -L "$HOME/.config/claude-deepseek/projects" ] && echo si || echo no)"
 echo "projects_target=$(readlink "$HOME/.config/claude-deepseek/projects" 2>/dev/null || true)"
 FAKE2
@@ -89,6 +91,20 @@ echo "$OUT" | grep -q "config_dir=$HOME/.config/claude-deepseek" && ok "aísla C
 echo "$OUT" | grep -q "projects_link=si" && ok "comparte las sesiones por defecto" || fail "sesiones no compartidas"
 echo "$OUT" | grep -q "projects_target=$HOME/.claude/projects" && ok "el symlink apunta a ~/.claude/projects" || fail "target del symlink"
 [ -d "$HOME/.claude/projects" ] && ok "crea ~/.claude/projects" || fail "falta ~/.claude/projects"
+
+# 9a. effort inicial como flag; /effort puede cambiarlo
+echo "$OUT" | grep -q "args=--effort max" && ok "pasa --effort max por defecto" || fail "effort por defecto"
+echo "$OUT" | grep -q "effort_env=unset" && ok "no exporta CLAUDE_CODE_EFFORT_LEVEL" || fail "effort env"
+
+OUT="$(DEEPSEEK_EFFORT_LEVEL=high "$PREFIX/claude-deepseek" 2>&1)"
+echo "$OUT" | grep -q "args=--effort high" && ok "respeta DEEPSEEK_EFFORT_LEVEL" || fail "effort desde env"
+
+OUT="$("$PREFIX/claude-deepseek" --effort low 2>&1)"
+echo "$OUT" | grep -q "args=--effort low" && ok "respeta --effort del usuario" || fail "--effort del usuario"
+echo "$OUT" | grep -q "args=--effort max" && fail "duplica --effort" || ok "no duplica --effort"
+
+OUT="$(CLAUDE_CODE_EFFORT_LEVEL=max "$PREFIX/claude-deepseek" 2>&1)"
+echo "$OUT" | grep -q "effort_env=unset" && ok "ignora CLAUDE_CODE_EFFORT_LEVEL heredado" || fail "effort heredado"
 
 # 9b. migra las sesiones existentes del perfil aislado y deja respaldo
 rm -rf "$HOME/.config/claude-deepseek/projects"

@@ -16,7 +16,7 @@
 #   -h, --help        esta ayuda
 set -euo pipefail
 
-VERSION="1.1.0"
+VERSION="1.1.1"
 BASE_URL_DEFAULT="https://api.deepseek.com/anthropic"
 MODEL_DEFAULT="deepseek-flash[1m]"
 FAST_MODEL_DEFAULT="deepseek-flash"
@@ -115,7 +115,7 @@ write_wrapper() {
 #   DEEPSEEK_BASE_URL       default https://api.deepseek.com/anthropic
 #   DEEPSEEK_MODEL          default deepseek-flash[1m]
 #   DEEPSEEK_FAST_MODEL     default deepseek-flash
-#   DEEPSEEK_EFFORT_LEVEL   default max
+#   DEEPSEEK_EFFORT_LEVEL   esfuerzo inicial; default max (via --effort)
 #   DEEPSEEK_CONFIG_DIR     default ~/.config/claude-deepseek
 #   DEEPSEEK_SHARE_SESSIONS default 1; 0 aisla las sesiones
 set -euo pipefail
@@ -161,7 +161,6 @@ export ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="$MODEL"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="$FAST_MODEL"
 export CLAUDE_CODE_SUBAGENT_MODEL="$FAST_MODEL"
-export CLAUDE_CODE_EFFORT_LEVEL="${DEEPSEEK_EFFORT_LEVEL:-max}"
 export CLAUDE_CODE_AUTO_COMPACT_WINDOW="${DEEPSEEK_AUTO_COMPACT_WINDOW:-786432}"
 
 # El token de DeepSeek debe ganar sobre una key de Anthropic heredada.
@@ -246,6 +245,20 @@ if [ "${DEEPSEEK_SHARED_CONFIG:-0}" != "1" ]; then
   }
 
   share_sessions
+fi
+
+# El esfuerzo inicial se pasa como flag, no como env: así el comando /effort
+# puede subirlo o bajarlo durante la sesión.
+EFFORT="${DEEPSEEK_EFFORT_LEVEL:-max}"
+HAS_EFFORT=0
+for arg in "$@"; do
+  case "$arg" in
+    --effort|--effort=*) HAS_EFFORT=1; break ;;
+  esac
+done
+unset CLAUDE_CODE_EFFORT_LEVEL
+if [ "$HAS_EFFORT" -eq 0 ]; then
+  set -- --effort "$EFFORT" "$@"
 fi
 
 exec claude "$@"
@@ -354,6 +367,7 @@ DEEPSEEK_API_KEY=
 # DEEPSEEK_MODEL=deepseek-flash[1m]
 # DEEPSEEK_FAST_MODEL=deepseek-flash
 # DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
+# Esfuerzo inicial; /effort puede cambiarlo durante la sesión.
 # DEEPSEEK_EFFORT_LEVEL=max
 # Comparte las sesiones con el perfil normal de Claude Code (0 = aislarlas).
 # DEEPSEEK_SHARE_SESSIONS=1
@@ -414,6 +428,7 @@ do_install() {
   echo
   info "para volver a Anthropic usa claude; el wrapper no toca el shell"
   info "las sesiones se comparten con claude por defecto; DEEPSEEK_SHARE_SESSIONS=0 lo desactiva"
+  info "el esfuerzo inicial es max (DEEPSEEK_EFFORT_LEVEL); /effort puede cambiarlo en la sesión"
   info "recarga el shell si los comandos no aparecen: exec \$SHELL -l"
 }
 
