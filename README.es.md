@@ -41,6 +41,10 @@ sha256sum -c install.sh.sha256    # macOS: shasum -a 256 -c install.sh.sha256
 bash install.sh
 ```
 
+¿Ya está instalado? Repetir el mismo comando es suficiente. El archivo de la
+key se conserva, el wrapper se reescribe y las sesiones se comparten en el
+siguiente arranque.
+
 ## Configuración
 
 ```bash
@@ -73,14 +77,55 @@ CLAUDE_CONFIG_DIR=~/.config/claude-deepseek
 ```
 
 `CLAUDE_CONFIG_DIR` es lo que evita el aviso "Both ANTHROPIC_AUTH_TOKEN and
-/login managed key set": la sesión de DeepSeek tiene su propia configuración,
-historial y plugins, y tu login de Anthropic queda intacto.
+/login managed key set": la sesión de DeepSeek tiene su propia configuración y
+plugins, y tu login de Anthropic queda intacto. Las sesiones se comparten por
+defecto; ver [Sesiones](#sesiones).
 
-Para compartir la configuración con tu Claude Code normal:
+Para compartir la configuración **completa** con tu Claude Code normal,
+incluida la autenticación y los MCP:
 
 ```bash
 DEEPSEEK_SHARED_CONFIG=1 claude-deepseek
 ```
+
+No hace falta para compartir sesiones, y expone tu login de Anthropic al
+proceso lanzado por DeepSeek.
+
+## Sesiones
+
+Ambos perfiles comparten los transcripts por defecto:
+
+```text
+~/.config/claude-deepseek/projects -> ~/.claude/projects
+```
+
+`claude --resume` y `claude-deepseek --resume` listan las mismas sesiones en
+ambas direcciones. Solo se comparte `projects/`: auth, settings, servidores
+MCP, plugins e historial de prompts quedan aislados.
+
+En el primer arranque tras actualizar, las sesiones que ya existen en el perfil
+DeepSeek se fusionan en `~/.claude/projects` y el directorio anterior se
+conserva como `projects.bak.<timestamp>`. La migración espera si hay otra sesión
+de `claude-deepseek` activa y se reintenta en el siguiente arranque.
+
+Para volver a perfiles aislados:
+
+```bash
+DEEPSEEK_SHARE_SESSIONS=0 claude-deepseek
+```
+
+Si el symlink de compartición ya existe, el siguiente arranque lo retira. Los
+transcripts quedan en `~/.claude/projects` y el perfil DeepSeek empieza con el
+historial vacío; las sesiones previas a la migración siguen en
+`projects.bak.<timestamp>` si ese respaldo se creó.
+
+Advertencias:
+
+- Al reanudar una sesión bajo DeepSeek, todo su historial se envía a DeepSeek.
+- No conviene reanudar la misma sesión en ambos perfiles al mismo tiempo.
+- La sesión reanudada usa los MCP, plugins y settings del perfil que la abre.
+- Si el endpoint de DeepSeek rechaza un transcript con bloques específicos del
+  proveedor, esa sesión se puede continuar con `claude`.
 
 ## Personalización
 
@@ -91,6 +136,7 @@ DEEPSEEK_MODEL=deepseek-v4-pro
 DEEPSEEK_FAST_MODEL=deepseek-flash
 DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
 DEEPSEEK_EFFORT_LEVEL=high
+DEEPSEEK_SHARE_SESSIONS=0   # aislar las sesiones
 ```
 
 ## Volver a Anthropic
@@ -128,6 +174,7 @@ bash install.sh --uninstall         # quitar binarios y archivo de la key
 | `HTTP 400` | nombre de modelo incorrecto | usar `deepseek-flash` |
 | `zsh: no matches found` | `[1m]` sin comillas | mantener `DEEPSEEK_MODEL='deepseek-flash[1m]'` |
 | Aviso de dos credenciales | configuración compartida | dejar `CLAUDE_CONFIG_DIR` como está, o `claude /logout` |
+| Las sesiones no aparecen en `claude-deepseek --resume` | perfil creado antes de 1.1.0 | reinstalar y arrancar una vez; el perfil se migra |
 | Los comandos no aparecen | shell sin recargar | `exec $SHELL -l` |
 
 ## Desinstalación
