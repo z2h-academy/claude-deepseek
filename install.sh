@@ -16,7 +16,7 @@
 #   -h, --help        esta ayuda
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 BASE_URL_DEFAULT="https://api.deepseek.com/anthropic"
 MODEL_DEFAULT="deepseek-flash[1m]"
 FAST_MODEL_DEFAULT="deepseek-flash"
@@ -30,7 +30,23 @@ FORCE=0
 MODE="install"
 
 usage() {
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+claude-deepseek — instala Claude Code configurado con DeepSeek.
+
+Uso local (clone):
+  bash install.sh
+
+Uso remoto:
+  curl -fsSL https://raw.githubusercontent.com/z2h-academy/claude-deepseek/main/install.sh | bash
+
+Opciones:
+  --prefix DIR      donde instalar los binarios (default: ~/.local/bin)
+  --no-path         no modificar los rc del shell
+  --force           reescribe el archivo de la key aunque exista
+  --check           solo verifica el entorno, no instala
+  --uninstall       quita los binarios y el archivo de la key
+  -h, --help        esta ayuda
+EOF
 }
 
 die() {
@@ -101,6 +117,7 @@ write_wrapper() {
 #   DEEPSEEK_FAST_MODEL     default deepseek-flash
 #   DEEPSEEK_EFFORT_LEVEL   default max
 #   DEEPSEEK_CONFIG_DIR     default ~/.config/claude-deepseek
+#   DEEPSEEK_SHARE_SESSIONS default 1; 0 aisla las sesiones
 set -euo pipefail
 
 CONFIG_DIR="${DEEPSEEK_CONFIG_DIR:-$HOME/.config/claude-deepseek}"
@@ -154,6 +171,81 @@ unset ANTHROPIC_API_KEY
 if [ "${DEEPSEEK_SHARED_CONFIG:-0}" != "1" ]; then
   export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$CONFIG_DIR}"
   mkdir -p "$CLAUDE_CONFIG_DIR"
+
+  # Comparte los transcripts con el perfil normal de Claude Code.
+  # Solo projects/: auth, MCPs, plugins y settings siguen aislados.
+  share_sessions() {
+    local main="$HOME/.claude/projects"
+    local local_projects="$CLAUDE_CONFIG_DIR/projects"
+    local backup active pid f
+
+    # Opt-out: si ya existe el symlink de compartición, se retira para volver
+    # al aislamiento. Las sesiones siguen intactas en ~/.claude/projects.
+    if [ "${DEEPSEEK_SHARE_SESSIONS:-1}" != "1" ]; then
+      if [ -L "$local_projects" ] && [ "$(readlink "$local_projects" 2>/dev/null)" = "$main" ]; then
+        rm -f "$local_projects" 2>/dev/null || true
+      fi
+      return 0
+    fi
+
+    mkdir -p -m 700 "$HOME/.claude" 2>/dev/null || return 0
+    mkdir -p -m 700 "$main" 2>/dev/null || return 0
+
+    # Si el perfil aislado es el propio ~/.claude, no hay nada que compartir.
+    if [ "$(cd "$CLAUDE_CONFIG_DIR" 2>/dev/null && pwd -P)" = "$(cd "$HOME/.claude" 2>/dev/null && pwd -P)" ]; then
+      return 0
+    fi
+
+    # Un symlink existente es una decisión del usuario: no tocarlo.
+    if [ -L "$local_projects" ]; then
+      return 0
+    fi
+
+    # Si ~/.claude/projects ya apunta al perfil aislado, no invertir el enlace.
+    if [ "$(cd "$main" 2>/dev/null && pwd -P)" = "$(cd "$local_projects" 2>/dev/null && pwd -P)" ]; then
+      return 0
+    fi
+
+    if [ -d "$local_projects" ]; then
+      # No migrar con otra sesión activa: sus escrituras quedarían en el
+      # directorio que se mueve al respaldo.
+      active=0
+      for f in "$CLAUDE_CONFIG_DIR"/sessions/*.json; do
+        [ -e "$f" ] || continue
+        pid="$(sed -n 's/.*"pid":[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$f" | head -n 1)"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+          active=1
+          break
+        fi
+      done
+      if [ "$active" -eq 1 ]; then
+        printf 'claude-deepseek: hay una sesión activa; las sesiones se compartirán en el próximo arranque\n' >&2
+        return 0
+      fi
+
+      if ! cp -Rpn "$local_projects/." "$main/" 2>/dev/null; then
+        printf 'claude-deepseek: no se pudieron migrar las sesiones; se mantiene el perfil aislado\n' >&2
+        return 0
+      fi
+
+      backup="${local_projects}.bak.$(date +%Y%m%d%H%M%S)"
+      if ! mv "$local_projects" "$backup" 2>/dev/null; then
+        printf 'claude-deepseek: no se pudo mover %s; se mantiene el perfil aislado\n' "$local_projects" >&2
+        return 0
+      fi
+      printf 'claude-deepseek: sesiones migradas a %s (respaldo: %s)\n' "$main" "$backup" >&2
+    fi
+
+    if [ ! -e "$local_projects" ]; then
+      if ln -s "$main" "$local_projects" 2>/dev/null; then
+        printf 'claude-deepseek: sesiones compartidas con %s\n' "$main" >&2
+      else
+        printf 'claude-deepseek: no se pudo compartir %s; se usa el perfil aislado\n' "$local_projects" >&2
+      fi
+    fi
+  }
+
+  share_sessions
 fi
 
 exec claude "$@"
@@ -263,6 +355,8 @@ DEEPSEEK_API_KEY=
 # DEEPSEEK_FAST_MODEL=deepseek-flash
 # DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
 # DEEPSEEK_EFFORT_LEVEL=max
+# Comparte las sesiones con el perfil normal de Claude Code (0 = aislarlas).
+# DEEPSEEK_SHARE_SESSIONS=1
 ENVFILE
     info "escrito $ENV_FILE (falta la key)"
   else
@@ -319,6 +413,7 @@ do_install() {
   echo "  3. claude-deepseek   # sesión contra DeepSeek"
   echo
   info "para volver a Anthropic usa claude; el wrapper no toca el shell"
+  info "las sesiones se comparten con claude por defecto; DEEPSEEK_SHARE_SESSIONS=0 lo desactiva"
   info "recarga el shell si los comandos no aparecen: exec \$SHELL -l"
 }
 
@@ -341,6 +436,14 @@ do_check() {
   else
     warn "falta la key: ejecuta deepseek-key"
   fi
+  local check_projects="${DEEPSEEK_CONFIG_DIR:-$HOME/.config/claude-deepseek}/projects"
+  if [ -L "$check_projects" ]; then
+    ok "sesiones compartidas con $(readlink "$check_projects")"
+  elif [ -d "$check_projects" ]; then
+    info "sesiones aisladas; se compartirán en el próximo arranque"
+  else
+    info "las sesiones se compartirán en el primer arranque"
+  fi
 }
 
 do_uninstall() {
@@ -355,6 +458,7 @@ do_uninstall() {
     rm -f "$ENV_FILE"
     info "eliminado $ENV_FILE"
   fi
+  info "las sesiones y el symlink de projects/ quedan intactos"
   info "las líneas de PATH en los rc quedan; bórralas a mano si quieres limpiar del todo"
 }
 
