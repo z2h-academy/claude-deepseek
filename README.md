@@ -40,8 +40,28 @@ sha256sum -c install.sh.sha256    # macOS: shasum -a 256 -c install.sh.sha256
 bash install.sh
 ```
 
-Already installed? Rerun the same command. The key file is preserved, the
-wrapper is rewritten, and sessions are shared on the next launch.
+Already installed? See [Updating](#updating).
+
+## Updating
+
+Rerun the installer. It preserves the key and rewrites the wrapper:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/z2h-academy/claude-deepseek/main/install.sh | bash
+```
+
+An open session keeps the environment it started with, so start a new
+`claude-deepseek` session to use the updated wrapper. To confirm the installed
+version without reinstalling:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/z2h-academy/claude-deepseek/main/install.sh | bash -s -- --check
+```
+
+From a clone, `bash install.sh --check` shows the same result. The first launch
+after upgrading may migrate existing DeepSeek sessions into `~/.claude/projects`
+(with a `projects.bak.<timestamp>` backup). From 1.1.1, `/effort` can change the
+effort level during the session.
 
 ## Configure
 
